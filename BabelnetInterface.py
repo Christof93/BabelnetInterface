@@ -256,7 +256,7 @@ if __name__=="__main__":
     #specify your own babelNet key from: http://babelnet.org/register
     #this class sets up a HTTP interface with the database
     
-    babelnet = BabelnetInterface(<key>)
+    babelnet = BabelnetInterface("<key>")
     
     #here you can search synsets by word. It is possible to define a pos-tag and you can give an array
     #of filter languages get synsets in other languages too.
