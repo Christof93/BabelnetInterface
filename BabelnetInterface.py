@@ -1,8 +1,3 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-
-# Christof Bless
-
 import urllib2
 import urllib
 import json
@@ -13,7 +8,7 @@ from StringIO import StringIO
 class BabelnetInterface:
     """this class provides an interface with the BabelNet lexical network through HTTP GET requests"""
     def __init__(self,key):
-        self.base_url = "https://babelnet.io/v4/"
+        self.base_url = "https://babelnet.io/v5/"
         #the key is granted upon registration on BabelNet, it allows for up to 1000 requests per day
         self.key = key
         
@@ -33,17 +28,19 @@ class BabelnetInterface:
         return data
         
         
-    def get_synsets_by_word(self,search_word,lang="EN",pos="",source=""):
+    def get_synsets_by_word(self,search_word,lang="EN",pos="",filterLangs=None,source=""):
         """get a Synset_list object containing all the synsets denoted by a given word. Optional arguments
-        are the language of the search word, pos-tag and source."""
-        params = {'word' : search_word,'lang':lang, 'source':source, 'key'  : self.key, 
+        are the language of the search word, pos-tag, filter languages and source."""
+        params = {'lemma' : search_word,'searchLang':lang, 'source':source, 'key'  : self.key, 
                     'pos':pos}
-        
-        query = urllib.urlencode(params)
+        if filterLangs:
+            query = urllib.urlencode(params)+"&targetLang="+"&targetLang=".join(filterLangs)
+        else:
+            query = urllib.urlencode(params)
         rq_url = self.base_url + "getSynsetIds?" + query
     
         data = self._request_respond(rq_url)
-        
+        #~ print data
         return Synset_list(self,data)
         
     def get_synsetinfo(self,id,filterLangs=None):
@@ -52,12 +49,13 @@ class BabelnetInterface:
         be retrieved in."""
         params = {'id' : id,'key'  : self.key}
         if filterLangs:
-            query = urllib.urlencode(params)+"&filterLangs="+"&filterLangs=".join(filterLangs)
+            query = urllib.urlencode(params)+"&targetLang="+"&targetLang=".join(filterLangs)
         else:
             query = urllib.urlencode(params)
         rq_url = self.base_url + "getSynset?" + query
         #~ print rq_url
         data=self._request_respond(rq_url)
+        print json.dumps(data,indent=3)
         return Babel_synset(self,id,data)
         
     def get_senses_by_word(self,search_word,lang="EN"):
@@ -71,10 +69,10 @@ class BabelnetInterface:
         
     def get_edges(self,id):
         """get a json object of all the edges connected to the synset.
-        Retrieve Hypernyms,Hyponyms,Meronyms, Holonyms, Antonyms, and other semantically related forms"""
+        Retrieve hypernyms,hyponyms,meronyms, holonyms, antonyms, and other semantically related forms"""
         params = {'id' : id,'key'  : self.key}
         query = urllib.urlencode(params)
-        rq_url = self.base_url + "getEdges?" + urllib.urlencode(params)
+        rq_url = self.base_url + "getOutgoingEdges?" + urllib.urlencode(params)
         data=self._request_respond(rq_url)
         return data #json output
         
@@ -82,19 +80,18 @@ class BabelnetInterface:
         """get a Synset_list object of a wikipedia article. POS-tags as well as sources can be specified"""
         params = {'id' : wiki_term, 'lang'  : lang, 'pos':pos, 'source':source,'key'  : self.key}
         if filterLangs:
-            query = urllib.urlencode(params)+"&filterLangs="+"&filterLangs=".join(filterLangs)
+            query = urllib.urlencode(params)+"&targetLang="+"&targetLang=".join(filterLangs)
         else:
             query = urllib.urlencode(params)
         rq_url = self.base_url + "getSynsetIdsFromResourceID?" + query
         data=self._request_respond(rq_url)
         return Synset_list(self,data)
         
-class Babel_synset(dict):
+class Babel_synset:
     """this class provides basic functionality to retrieve the most important informations about a synset. An instance of this
-    class is returned by the 'get_synsetinfo' function of the class 'BabelHTML'."""
+    class is returned by the 'get_synsetinfo' function of the class 'BabelnetInterface'."""
     def __init__(self, interface, synid, synsetinfo):
         self.data=synsetinfo
-        dict.__init__(self,self.data)
         #this dict defines for each sense's source identifier the more readable lemma, so later we can assign glosses to lemmas.
         self.senses={}
         self.req_interface=interface
@@ -102,19 +99,11 @@ class Babel_synset(dict):
         self.synset_id=synid
         
         for entry in self.data["senses"]:
-            try:
-                key=entry["wordNetOffset"]
-            except KeyError:
-                if entry["sensekey"]=="":   
-                        key = entry["lemma"]
-                elif entry["sensekey"].startswith("Q"):
-                    key = entry["sensekey"][:entry["sensekey"].rfind("#")]+"_"+entry["language"]
-                elif "#" in entry["sensekey"]:
-                    key= entry["sensekey"][:entry["sensekey"].rfind("#")]
-                else:
-                    key= entry["sensekey"]
-            finally:
-                self.senses[key] = entry["lemma"]
+            key=entry["properties"]["idSense"]
+            self.senses[key] = entry["properties"]["fullLemma"]
+    
+    def __getitem__(self,key):
+        return self.data[key]           
     
     def __repr__(self):
         """the structure of the json object is represented with json.dumps with indent. This is an option to pretty-print
@@ -147,7 +136,7 @@ class Babel_synset(dict):
         return glosses
     def get_translations(self):
         """get the translation of the synset"""
-        return
+        return [entry for entry in self.data["translations"]]
         
     def get_connections(self):
         """get all the Synsets that are connected to the synset"""
@@ -199,15 +188,31 @@ class Babel_synset(dict):
                 meronyms.append(edge["target"])
         return meronyms
         
-class Synset_list(list):
+class Synset_list:
     """this class handles the synset list from the 'get_synsets_by_word' method. If your term has only one synset
     assigned to, this class won't be able to help you a lot."""
     def __init__(self,interface,my_list):
         self.req_interface=interface
         self.synlist=my_list
-        list.__init__(self,self.synlist)
         self.synsets={}
         self.edges={}
+        
+    def __len__(self):
+        return len(self.synlist)
+        
+    def __contains__(self,item):
+        return item in self.synlist
+    def __add__(self,other_sequence):
+        return Synset_list(self.synlist + other_sequence)
+        
+    def __getitem__(self,key):
+        if isinstance(key,slice):
+            return Synset_list(self.synlist[key.start:key.stop:key.step])
+        else:
+            return self.synlist[key]
+            
+    def __setitem__(self,key,item):
+        self.synlist[key]=item
         
     def __repr__(self):
         return json.dumps(self.synlist, indent=4)
@@ -218,7 +223,7 @@ class Synset_list(list):
         
     def list_main_senses(self,num_of_senses=None):
         """assigns the synset identifier to the most prominent sense of the synset and lists them in
-        tuple of id, synset type and sense. Be aware that the function performs n requests
+        tuple of id, synset type and sense. Be aware that the function performs n database requests
         with n as the number of synsets"""
         self.main_senses=[]
         
@@ -253,21 +258,22 @@ if __name__=="__main__":
     #example usage
     
     
-    #specify your own babelNet key from: http://babelnet.org/register
+    #specify your own babelNet key from: http://babelnet.org/register  or use my key
     #this class sets up a HTTP interface with the database
     
     babelnet = BabelnetInterface("<key>")
     
     #here you can search synsets by word. It is possible to define a pos-tag and you can give an array
     #of filter languages get synsets in other languages too.
-    my_synsets = babelnet.get_synsets_by_word("Israeli",pos="ADJECTIVE",)
+    my_synsets = babelnet.get_synsets_by_word("Israeli",pos="ADJ")
     print my_synsets.list_main_senses()
-    print my_synsets[0]
     #iterate through the synset list and retrieve the synsetinfo for each synset
     for entity in my_synsets.get_IDs():
-        synset=babelnet.get_synsetinfo(entity)
-        print synset["mainSense"]
-        print synset.get_categories()
+        synset=babelnet.get_synsetinfo(entity,filterLangs=["DE","FR"])
+        #~ print synset
+        print synset.get_connections()
+        #print json.dumps(edges, indent=4)
+    
         
         
     
