@@ -55,7 +55,6 @@ class BabelnetInterface:
         rq_url = self.base_url + "getSynset?" + query
         #~ print rq_url
         data=self._request_respond(rq_url)
-        print json.dumps(data,indent=3)
         return Babel_synset(self,id,data)
         
     def get_senses_by_word(self,search_word,lang="EN"):
@@ -87,7 +86,7 @@ class BabelnetInterface:
         data=self._request_respond(rq_url)
         return Synset_list(self,data)
         
-class Babel_synset:
+class Babel_synset(dict):
     """this class provides basic functionality to retrieve the most important informations about a synset. An instance of this
     class is returned by the 'get_synsetinfo' function of the class 'BabelnetInterface'."""
     def __init__(self, interface, synid, synsetinfo):
@@ -97,13 +96,12 @@ class Babel_synset:
         self.req_interface=interface
         self.edges={}
         self.synset_id=synid
+        dict.__init__(self,self.data)
         
         for entry in self.data["senses"]:
             key=entry["properties"]["idSense"]
             self.senses[key] = entry["properties"]["fullLemma"]
     
-    def __getitem__(self,key):
-        return self.data[key]           
     
     def __repr__(self):
         """the structure of the json object is represented with json.dumps with indent. This is an option to pretty-print
@@ -188,7 +186,7 @@ class Babel_synset:
                 meronyms.append(edge["target"])
         return meronyms
         
-class Synset_list:
+class Synset_list(list):
     """this class handles the synset list from the 'get_synsets_by_word' method. If your term has only one synset
     assigned to, this class won't be able to help you a lot."""
     def __init__(self,interface,my_list):
@@ -196,23 +194,7 @@ class Synset_list:
         self.synlist=my_list
         self.synsets={}
         self.edges={}
-        
-    def __len__(self):
-        return len(self.synlist)
-        
-    def __contains__(self,item):
-        return item in self.synlist
-    def __add__(self,other_sequence):
-        return Synset_list(self.synlist + other_sequence)
-        
-    def __getitem__(self,key):
-        if isinstance(key,slice):
-            return Synset_list(self.synlist[key.start:key.stop:key.step])
-        else:
-            return self.synlist[key]
-            
-    def __setitem__(self,key,item):
-        self.synlist[key]=item
+        list.__init__(self,self.synlist)
         
     def __repr__(self):
         return json.dumps(self.synlist, indent=4)
@@ -258,7 +240,7 @@ if __name__=="__main__":
     #example usage
     
     
-    #specify your own babelNet key from: http://babelnet.org/register  or use my key
+    #specify your own babelNet key from: http://babelnet.org/register
     #this class sets up a HTTP interface with the database
     
     babelnet = BabelnetInterface("<key>")
@@ -270,7 +252,6 @@ if __name__=="__main__":
     #iterate through the synset list and retrieve the synsetinfo for each synset
     for entity in my_synsets.get_IDs():
         synset=babelnet.get_synsetinfo(entity,filterLangs=["DE","FR"])
-        #~ print synset
         print synset.get_connections()
         #print json.dumps(edges, indent=4)
     
