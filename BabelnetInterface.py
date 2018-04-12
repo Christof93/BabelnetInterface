@@ -122,15 +122,10 @@ class Babel_synset(dict):
     def get_glosses(self):
         """get a tuple of lemma, source-identifier and gloss"""
         glosses=[]
+        print self.data["glosses"]
         for entry in self.data["glosses"]:
-            try:
-                sense_lemma=self.senses[entry["sourceSense"]]
-            except KeyError as error:
-                try:
-                    sense_lemma=self.senses[entry["sourceSense"].lower()]
-                except KeyError:
-                    sense_lemma=entry["sourceSense"]
-            glosses.append((sense_lemma,entry["sourceSense"],entry["gloss"],entry["source"]))
+            
+            glosses.append((entry["sourceSense"],entry["gloss"],entry["source"]))
         return glosses
     def get_translations(self):
         """get the translation of the synset"""
@@ -251,8 +246,10 @@ if __name__=="__main__":
     print my_synsets.list_main_senses()
     #iterate through the synset list and retrieve the synsetinfo for each synset
     for entity in my_synsets.get_IDs():
-        synset=babelnet.get_synsetinfo(entity,filterLangs=["DE","FR"])
+        synset=babelnet.get_synsetinfo(entity,filterLangs=["EN","FR"])
+        print synset
         print synset.get_connections()
+        print synset.get_glosses()
         #print json.dumps(edges, indent=4)
     
         
